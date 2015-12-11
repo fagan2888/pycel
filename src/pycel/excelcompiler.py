@@ -116,8 +116,13 @@ class Spreadsheet(object):
         # recalculate formula
         # the compiled expression calls this function
         def eval_cell(address):
-            return self.evaluate(address)
-        
+            v = self.evaluate(address)
+            # having problems multiplying decimal and float
+            try:
+                return float(v)
+            except:
+                return v      
+
         def eval_range(rng):
             return self.evaluate_range(rng)
                 
