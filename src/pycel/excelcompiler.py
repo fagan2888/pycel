@@ -11,7 +11,13 @@ from tokenizer import ExcelParser, f_token, shunting_yard
 import cPickle
 import logging
 import networkx as nx
+import math
 
+def roundup(value, prevision):
+    return math.ceil(value)
+
+def rounddown(value, prevision):
+    return math.floor(value)
 
 __version__ = filter(str.isdigit, "$Revision: 2524 $")
 __date__ = filter(str.isdigit, "$Date: 2011-09-06 17:05:00 +0100 (Tue, 06 Sep 2011) $")
