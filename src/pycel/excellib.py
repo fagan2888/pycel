@@ -5,6 +5,8 @@ from __future__ import division
 import numpy as np
 from math import log
 from pycel.excelutil import flatten
+import scipy
+import math
 
 ######################################################################################
 # A dictionary that maps excel function names onto python equivalents. You should
@@ -162,10 +164,30 @@ def linest(*args, **kwargs):
         
     return coefs
 
+def roundup(*args):
+    return math.ceil(args[0])
+
+def rounddown(*args):
+    return math.floor(args[0])
+
+def pmt(*args):
+    rate, nper, pv = args[0], args[1], args[2]
+    return scipy.pmt(rate, nper, pv)
+
+def irr(*args):
+    return scipy.irr(args[0])
+
+def fv(*args):
+    rate, nper, pmt, pv = args[0], args[1], args[2], 0
+    return scipy.fv(rate, nper, pmt, pv)
+
+def pv(*args):
+    rate, nper, pmt = args[0], args[1], args[2]
+    return scipy.pv(rate, nper, pmt)
+
 def npv(*args):
-    discount_rate = args[0]
-    cashflow = args[1]
-    return sum([float(x)*(1+discount_rate)**-(i+1) for (i,x) in enumerate(cashflow)])
+    discount_rate, cashflow = args[0], args[1]
+    return scipy.npv(discount_rate, cashflow)
 
 if __name__ == '__main__':
     pass
