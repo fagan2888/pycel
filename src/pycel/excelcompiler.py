@@ -1,7 +1,17 @@
+# We will choose our wrapper with os compatibility
+#       ExcelComWrapper : Must be run on Windows as it requires a COM link to an Excel instance.
+#       ExcelOpxWrapper : Can be run anywhere but only with post 2010 Excel formats
+try:
+    import win32com.client
+    import pythoncom
+    from pycel.excelwrapper import ExcelComWrapper as ExcelWrapperImpl
+except:
+    print "Can\'t import win32com -> switch from Com to Openpyxl wrapping implementation"
+    from pycel.excelwrapper import ExcelOpxWrapper as ExcelWrapperImpl
+
 import excellib
 from excellib import *
 from excelutil import *
-from excelwrapper import ExcelComWrapper
 from math import *
 from networkx.classes.digraph import DiGraph
 from networkx.drawing.nx_pydot import write_dot
@@ -127,7 +137,7 @@ class Spreadsheet(object):
             return self.evaluate_range(rng)
                 
         try:
-            #print "Evalling: %s, %s" % (cell.address(),cell.python_expression)
+            print "Evalling: %s, %s" % (cell.address(),cell.python_expression)
             vv = eval(cell.compiled_expression)
             #print "Cell %s evalled to %s" % (cell.address(),vv)
             if vv is None:
@@ -551,10 +561,8 @@ class Context(object):
 class ExcelCompiler(object):
     """Class responsible for taking an Excel spreadsheet and compiling it to a Spreadsheet instance
        that can be serialized to disk, and executed independently of excel.
-       
-       Must be run on Windows as it requires a COM link to an Excel instance.
-       """
-       
+    """
+
     def __init__(self, filename=None, excel=None, *args,**kwargs):
 
         super(ExcelCompiler,self).__init__()
@@ -565,7 +573,7 @@ class ExcelCompiler(object):
             self.excel = excel
         else:
             # TODO: use a proper interface so we can (eventually) support loading from file (much faster)  Still need to find a good lib though.
-            self.excel = ExcelComWrapper(filename=filename)
+            self.excel = ExcelWrapperImpl(filename=filename)
             self.excel.connect()
             
         self.log = logging.getLogger("decode.{0}".format(self.__class__.__name__))
@@ -595,12 +603,12 @@ class ExcelCompiler(object):
     def gen_graph(self, seed, sheet=None):
         """Given a starting point (e.g., A6, or A3:B7) on a particular sheet, generate
            a Spreadsheet instance that captures the logic and control flow of the equations."""
-        
+
         # starting points
         cursheet = sheet if sheet else self.excel.get_active_sheet()
         self.excel.set_sheet(cursheet)
         
-        seeds,nr,nc = Cell.make_cells(self.excel, seed, sheet=cursheet)
+        seeds, nr, nc = Cell.make_cells(self.excel, seed, sheet=cursheet) # no need to output nr and nc here, since seed can be a list of unlinked cells
         seeds = list(flatten(seeds))
         
         print "Seed %s expanded into %s cells" % (seed,len(seeds))

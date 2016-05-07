@@ -189,7 +189,9 @@ class Cell(object):
     def make_cells(excel, range, sheet=None):
         cells = [];
 
-        if is_range(range):
+        def convert_range(range, sheet=None):
+            cells = []
+
             # use the sheet specified in the range, else the passed sheet
             sh,start,end = split_range(range)
             if sh: sheet = sh
@@ -205,6 +207,7 @@ class Cell(object):
             r = excel.get_range(range)
             fs = r.Formula
             vs = r.Value
+            print fs, vs
             
             for it in (list(izip(*x)) for x in izip(ads,fs,vs)):
                 row = []
@@ -223,15 +226,35 @@ class Cell(object):
                 cells = [x[0] for x in cells]
             else:
                 pass
-        else:
-            c = Cell.resolve_cell(excel, range, sheet=sheet)
-            cells.append(c)
 
-            numrows = 1
-            numcols = 1
+            return cells, numrows, numcols
+
+        if isinstance(range, list): # if a list of cells
+            for cell in range:
+                if is_range(cell):
+                    cs_in_range, nr, nc = convert_range(cell, sheet)
+                    cells.append(cs_in_range)
+                else:
+                    c = Cell.resolve_cell(excel, cell, sheet=sheet)
+                    cells.append(c) 
+
+            cells = list(flatten(cells))
+
+            return (cells,-1,-1) # numrows and numcols are irrelevant here, so we return nr=nc=-1 
+
+        else:
+            if is_range(range):
+                cells, numrows, numcols = convert_range(range, sheet)
+                    
+            else:
+                c = Cell.resolve_cell(excel, range, sheet=sheet)
+                cells.append(c)
+
+                numrows = 1
+                numcols = 1
             
-        return (cells,numrows,numcols)
-    
+            return (cells,numrows,numcols)
+
 def is_range(address):
     return address.find(':') > 0
 
@@ -429,6 +452,160 @@ def uniqueify(seq):
     seen = set()
     seen_add = seen.add
     return [ x for x in seq if x not in seen and not seen_add(x)]
+
+def is_number(s): # http://stackoverflow.com/questions/354038/how-do-i-check-if-a-string-is-a-number-float-in-python
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
+def is_leap_year(year):
+    if not is_number(year):
+        raise TypeError("%s must be a number" % str(year))
+    if year <= 0:
+        raise TypeError("%s must be strictly positive" % str(year))
+
+    # Watch out, 1900 is a leap according to Excel => https://support.microsoft.com/en-us/kb/214326
+    return (year % 4 == 0 and year % 100 != 0 or year % 400 == 0) or year == 1900
+
+def get_max_days_in_month(month, year):
+    if not is_number(year) or not is_number(month):
+        raise TypeError("All inputs must be a number")
+    if year <= 0 or month <= 0:
+        raise TypeError("All inputs must be strictly positive")
+
+    if month in (4, 6, 9, 11):
+        return 30
+    elif month == 2:
+        if is_leap_year(year):
+            return 29
+        else:
+            return 28
+    else:
+        return 31
+
+def normalize_year(y, m, d):
+    if m <= 0:
+        y -= int(abs(m) / 12 + 1)
+        m = 12 - (abs(m) % 12)
+        normalize_year(y, m, d)
+    elif m > 12:
+        y += int(m / 12)
+        m = m % 12
+
+    if d <= 0:
+        d += get_max_days_in_month(m, y)
+        m -= 1
+        y, m, d = normalize_year(y, m, d)
+
+    else:
+        if m in (4, 6, 9, 11) and d > 30:
+            m += 1
+            d -= 30
+            y, m, d = normalize_year(y, m, d)
+        elif m == 2:
+            if (is_leap_year(y)) and d > 29:
+                m += 1
+                d -= 29
+                y, m, d = normalize_year(y, m, d)
+            elif (not is_leap_year(y)) and d > 28:
+                m += 1
+                d -= 28
+                y, m, d = normalize_year(y, m, d)
+        elif d > 31:
+            m += 1
+            d -= 31
+            y, m, d = normalize_year(y, m, d)
+
+    return (y, m, d)
+
+def date_from_int(nb):
+    if not is_number(nb):
+        raise TypeError("%s is not a number" % str(nb))
+
+    # origin of the Excel date system
+    current_year = 1900
+    current_month = 0
+    current_day = 0
+
+    while(nb > 0):
+        if not is_leap_year(current_year) and nb > 365:
+            current_year += 1
+            nb -= 365
+        elif is_leap_year(current_year) and nb > 366:
+            current_year += 1
+            nb -= 366
+        else:
+            current_month += 1
+            max_days = get_max_days_in_month(current_month, current_year)
+            
+            if nb > max_days:
+                nb -= max_days
+            else:
+                current_day = nb
+                nb = 0
+
+    return (current_year, current_month, current_day)
+
+def criteria_parser(criteria):
+
+    if is_number(criteria):
+        def check(x):
+            return x == criteria #and type(x) == type(criteria)
+    elif type(criteria) == str:
+        search = re.search('(\W*)(.*)', criteria.lower()).group
+        operator = search(1)
+        value = search(2)
+        value = float(value) if is_number(value) else str(value)
+
+        if operator == '<':
+            def check(x):
+                if not is_number(x):
+                    raise TypeError('excellib.countif() doesnt\'t work for checking non number items against non equality')
+                return x < value
+        elif operator == '>':
+            def check(x):
+                if not is_number(x):
+                    raise TypeError('excellib.countif() doesnt\'t work for checking non number items against non equality')
+                return x > value
+        elif operator == '>=':
+            def check(x):
+                print '\n TEST', x
+                if not is_number(x):
+                    raise TypeError('excellib.countif() doesnt\'t work for checking non number items against non equality')
+                return x >= value
+        elif operator == '<=':
+            def check(x):
+                if not is_number(x):
+                    raise TypeError('excellib.countif() doesnt\'t work for checking non number items against non equality')
+                return x <= value
+        elif operator == '<>':
+            def check(x):
+                if not is_number(x):
+                    raise TypeError('excellib.countif() doesnt\'t work for checking non number items against non equality')
+                return x != value
+        else:
+            def check(x):
+                return x == criteria
+    else:
+        raise Exception('Could\'t parse criteria %s' % criteria)
+
+    return check
+
+
+def find_corresponding_index(range, criteria):
+
+    # parse criteria
+    check = criteria_parser(criteria)
+
+    valid = []
+
+    for index, item in enumerate(range):
+        if check(item):
+            valid.append(index)
+
+    return valid
 
 if __name__ == '__main__':
     pass
